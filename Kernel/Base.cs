@@ -1,4 +1,4 @@
-﻿#define PAD_END_OF_STRUCT
+﻿#define PAD_END_OF_STRUCT 
 //#define PAD_END_OF_ARRAYS
 //#define INIT_NULL_ARRAY_OBJECTS_ON_WRITE
 using System;
