@@ -14,7 +14,7 @@ namespace kernel_test
     {
         static void Main(string[] args)
         {
-            //intentional compiler error to make you read this. you can delete this line now
+            intentional compiler error to make you read this. you can delete this line now
             /*I made this to simplify sending/receiving serial data from MCU boards such as STM
              * and Atmel. This is by no means an all encompassing Serializing project. It hadles
              * basic C/C++ data types. Other types could be added, I just do not have a need
