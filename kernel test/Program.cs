@@ -83,14 +83,14 @@ namespace kernel_test
             string str = Kernel.Binary.to_c_c_plusplus(th);
 
             //set some values in the class
-            th.a[0] = 75; th.a[2] = 4; th.c[2] = 99;
+            th.air_assist = 75; th.coolant = 4; th.temperature = 99;
 
             /*Convert this class to a stream of bytes that can be sent over serial
              * This method is overlaoded.
              * ToArray() will return a stream of bytes with NO CRC
              * ToArray(true) will return a stream of bytes WITH a computed 16 bit crc value
              */
-            List<byte> byte_data = th.ToArray(true);
+            List<byte> byte_data = th.ToArray(true,"crc");
 
             /*Simulated serial data
              * If we take our List<byte> data from above and send that bye array into the
@@ -105,7 +105,7 @@ namespace kernel_test
              * NOTE: I HAVE NOT FINSIHED MY COMM CLASS. I have written jsut enough code in
              * it to do serial testing.
              */
-            Kernel.Record_Types.ToolHead th1 = Kernel.Record_Types.ToolHead.SerialProcessor(byte_data);
+            Kernel.Record_Types.ToolHead th1 = Kernel.Record_Types.ToolHead.SerialProcessor(byte_data,"crc");
 
             /*This serves no real purpose to already have a class created, convert to
              * binary, and then convert back. Im just showing an example of how you would 

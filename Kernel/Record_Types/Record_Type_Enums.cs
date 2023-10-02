@@ -8,7 +8,9 @@ namespace Kernel.Record_Types
 {
     public enum Record_Type
     {
-        ToolHead = 1,
-        Fan = 2,
+        Invalid = 0,
+        Control = 1,
+        ToolHead = 2,
+        Fan = 3,
     }
 }

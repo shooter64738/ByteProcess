@@ -14,7 +14,9 @@
 //#define WORD_SIZE_64
 //#define TARGET_IS_LITTLE_ENDIAN
 //#define TARGET_IS_BIG_ENDIAN
-#define PAD_END_OF_STRUCT 
+#define PAD_END_OF_STRUCT
+#define ENFORCE_BIT_NUMBERS_ON_SIZE
+//#define PAD_END_OF_ARRAYS
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -24,6 +26,55 @@ using System.Threading.Tasks;
 
 namespace Kernel
 {
+    public static class Bits
+    {
+        public static int set<T>(T value, int bit)
+        {
+#if ENFORCE_BIT_NUMBERS_ON_SIZE
+
+            Binary.c_conv cnv = Binary._size_of_type(value.GetType());
+            if (bit > (cnv.size * 8) - 1)
+                throw new Exception($"The type '{value.GetType()}' passed into 'method Kernel.Binary.Bits.set()' does not have a bit position '{bit}'.");
+#endif
+            int temp = Convert.ToInt32(value);
+            temp |= (1 << bit);
+            return temp;
+        }
+        public static int clr<T>(T value, byte bit)
+        {
+#if ENFORCE_BIT_NUMBERS_ON_SIZE
+
+            Binary.c_conv cnv = Binary._size_of_type(value.GetType());
+            if (bit > (cnv.size * 8) - 1)
+                throw new Exception($"The type '{value.GetType()}' passed into 'method Kernel.Binary.Bits.clr()' does not have a bit position '{bit}'.");
+#endif
+            int temp = Convert.ToInt32(value);
+            temp &= ~(1 << bit);
+            return temp;
+        }
+        public static bool get<T>(T value, byte bit)
+        {
+#if ENFORCE_BIT_NUMBERS_ON_SIZE
+
+            Binary.c_conv cnv = Binary._size_of_type(value.GetType());
+            if (bit > (cnv.size * 8) - 1)
+                throw new Exception($"The type '{value.GetType()}' passed into 'method Kernel.Binary.Bits.get()' does not have a bit position '{bit}'.");
+#endif
+            int temp = Convert.ToInt32(value);
+            return (temp & (1 << bit)) != 0;
+        }
+        public static int flp<T>(T value, byte bit)
+        {
+#if ENFORCE_BIT_NUMBERS_ON_SIZE
+
+            Binary.c_conv cnv = Binary._size_of_type(value.GetType());
+            if (bit > (cnv.size * 8) - 1)
+                throw new Exception($"The type '{value.GetType()}' passed into 'method Kernel.Binary.Bits.set()' does not have a bit position '{bit}'.");
+#endif
+            int temp = Convert.ToInt32(value);
+            return (temp ^ (1 << bit));
+        }
+    }
     public static class Binary
     {
         public enum e_endianess { Little = 1, Big = 2 }
@@ -36,31 +87,41 @@ namespace Kernel
             if (!BitConverter.IsLittleEndian)
                 Endianess = e_endianess.Big;
 
+            if (type_lkup == null)
+            {
+                type_lkup = new Dictionary<string, c_conv>();
+                type_lkup.Add(typeof(UInt32).ToString(), new c_conv(typeof(UInt32), typeof(UInt32), 4, "uint32_t", c_conv.get_bytes_uint32, c_conv.set_bytes_uint32));
+                type_lkup.Add(typeof(UInt16).ToString(), new c_conv(typeof(UInt16), typeof(UInt16), 2, "uint16_t", c_conv.get_bytes_uint16, c_conv.set_bytes_uint16));
+                //type_lkup.Add(typeof(ushort).ToString(), new c_conv(typeof(ushort), typeof(UInt16), 2, "uint16_t"));
+                type_lkup.Add(typeof(byte).ToString(), new c_conv(typeof(byte), typeof(byte), 1, "uint8_t", c_conv.get_bytes_uint8, c_conv.set_bytes_uint8));
+
+                type_lkup.Add(typeof(Int32).ToString(), new c_conv(typeof(Int32), typeof(Int32), 4, "int32_t", c_conv.get_bytes_uint32, c_conv.set_bytes_int16));
+                type_lkup.Add(typeof(Int16).ToString(), new c_conv(typeof(Int16), typeof(Int16), 2, "int16_t", c_conv.get_bytes_int16, c_conv.set_bytes_int16));
+                //type_lkup.Add(typeof(short).ToString(), new c_conv(typeof(short), typeof(Int16), 2, "int16_t"));
+                type_lkup.Add(typeof(sbyte).ToString(), new c_conv(typeof(sbyte), typeof(sbyte), 1, "int8_t", c_conv.get_bytes_int8, c_conv.set_bytes_int8));
+
+                //custom type used in the record processor
+                type_lkup.Add(typeof(Record_Types.Record_Type).ToString(), new c_conv(typeof(Record_Types.Record_Type), typeof(sbyte), 1, "e_record_types", c_conv.get_bytes_record_type, c_conv.set_bytes_int8));
+            }
+
         }
         /*
          * To support more data types that need conversions, add them in the c_conv class
          * a get/set handler func will be needed. Just follow the examples.
          */
+        public static c_conv _size_of_type(Type obj_type)
+        {
+            c_conv new_value;
+            type_lkup.TryGetValue(obj_type.ToString(), out new_value);
+            return new_value;
 
+        }
+        static Dictionary<string, c_conv> type_lkup = null;
         public class c_conv
         {
 
-            static Dictionary<string, c_conv> type_lkup = null;
             public static c_conv _size_of_type(Type obj_type)
             {
-                if (type_lkup == null)
-                {
-                    type_lkup = new Dictionary<string, c_conv>();
-                    type_lkup.Add(typeof(UInt32).ToString(), new c_conv(typeof(UInt32), typeof(UInt32), 4, "uint32_t", c_conv.get_bytes_uint32, c_conv.set_bytes_uint32));
-                    type_lkup.Add(typeof(UInt16).ToString(), new c_conv(typeof(UInt16), typeof(UInt16), 2, "uint16_t", c_conv.get_bytes_uint16, c_conv.set_bytes_uint16));
-                    //type_lkup.Add(typeof(ushort).ToString(), new c_conv(typeof(ushort), typeof(UInt16), 2, "uint16_t"));
-                    type_lkup.Add(typeof(byte).ToString(), new c_conv(typeof(byte), typeof(byte), 1, "uint8_t", c_conv.get_bytes_uint8, c_conv.set_bytes_uint8));
-
-                    type_lkup.Add(typeof(Int32).ToString(), new c_conv(typeof(Int32), typeof(Int32), 4, "int32_t", c_conv.get_bytes_uint32, c_conv.set_bytes_int16));
-                    type_lkup.Add(typeof(Int16).ToString(), new c_conv(typeof(Int16), typeof(Int16), 2, "int16_t", c_conv.get_bytes_int16, c_conv.set_bytes_int16));
-                    //type_lkup.Add(typeof(short).ToString(), new c_conv(typeof(short), typeof(Int16), 2, "int16_t"));
-                    type_lkup.Add(typeof(sbyte).ToString(), new c_conv(typeof(sbyte), typeof(sbyte), 1, "int8_t", c_conv.get_bytes_int8, c_conv.set_bytes_int8));
-                }
                 c_conv new_value;
                 type_lkup.TryGetValue(obj_type.ToString(), out new_value);
                 return new_value;
@@ -113,6 +174,12 @@ namespace Kernel
                 return BitConverter.GetBytes((byte)value);
             }
 
+            public static byte[] get_bytes_record_type(object value)
+            {
+                byte t_type = (byte)(Record_Types.Record_Type)value;
+                return BitConverter.GetBytes((byte)t_type);
+            }
+
             public static object set_bytes_int32(byte[] value, int pos)
             {
                 return (UInt16)BitConverter.ToInt32(_fix_endian(value, pos, 4), 0);
@@ -147,7 +214,7 @@ namespace Kernel
             protected internal static byte[] _fix_endian(byte[] value, int pos, int size)
             {
 
-                byte[] output = new byte[4];
+                byte[] output = new byte[size];
                 Array.Copy(value, pos, output, 0, size);
                 if (Binary.Endianess != e_endianess.Little && BitConverter.IsLittleEndian)
                     Array.Reverse(output);
@@ -158,7 +225,11 @@ namespace Kernel
 
         private static System.Reflection.BindingFlags bind_flag =
                 BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public
-                | BindingFlags.NonPublic | BindingFlags.FlattenHierarchy;
+                | BindingFlags.NonPublic;// | BindingFlags.FlattenHierarchy;
+
+        private static System.Reflection.BindingFlags bind_flag_exporter =
+                BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public
+                | BindingFlags.NonPublic;
 
         public static void SetEndianes(e_endianess end)
         {
@@ -172,9 +243,10 @@ namespace Kernel
 
         private static int _align(int address, int byte_width)
         {
+            return (address + ((byte_width - (address % byte_width)) % byte_width));
             return ((address + (byte_width - 1)) & ~(byte_width - 1));
         }
-                
+
         private static int _h_size_array(int begin_address, ref int widest_byte
             , FieldInfo array_object, object constructor, Dictionary<string, int> mem_address_list)
         {
@@ -211,6 +283,10 @@ namespace Kernel
 
         public static int _size_of<T>(T new_obj)
         {
+            return _size_of(new_obj, 0);
+        }
+        public static int _size_of<T>(T new_obj, int origin_address)
+        {
             int byte_size = 0;
             int aligned_size = 0;
             int widest_byte = 0;
@@ -218,23 +294,45 @@ namespace Kernel
             FieldInfo xref_source = new_obj.GetType().GetField("mem_address", bind_flag);
             Dictionary<string, int> mem_address_list = (Dictionary<string, int>)xref_source.GetValue(new_obj);
 
-            foreach (FieldInfo current_fld in new_obj.GetType().
-                GetFields(bind_flag).OrderBy(field => field.MetadataToken))
+            FieldInfo[] all_fld = new_obj.GetType().
+                GetFields(bind_flag).OrderBy(field => field.MetadataToken).ToArray();
+            //seems to be a problem with the foreach orderby. its pulling fields from subclasses
+            //foreach (FieldInfo current_fld in new_obj.GetType().
+            //    GetFields(bind_flag).OrderBy(field => field.MetadataToken))
+            for (int fld = 0; fld < all_fld.Length; fld++)
             {
+                FieldInfo current_fld = all_fld[fld];
                 if (current_fld.FieldType.IsArray)
                 {
                     aligned_size = _h_size_array(aligned_size, ref widest_byte, current_fld, new_obj, mem_address_list);
                 }
+                else if (current_fld.FieldType.IsClass && current_fld.Name != "mem_address")
+                {
+                    FieldInfo cl_widest = current_fld.FieldType.GetField("__widest__");
+                    int cl_widest_byte = (int)cl_widest.GetValue(new_obj);
+                    widest_byte = Math.Max(cl_widest_byte, widest_byte);
+
+                    widest_byte = Math.Max(byte_size, widest_byte);
+                    aligned_size = Binary._align(aligned_size, widest_byte);
+                    //FieldInfo xref_source = new_obj.GetType().GetField("mem_address",bind_flag);
+                    //List<int> mem_address_list =(List<int>) xref_source.GetValue(new_obj);
+                    mem_address_list.Add(current_fld.Name, aligned_size);
+                    FieldInfo cl_size = current_fld.FieldType.GetField("__size__");
+                    byte_size = (int)cl_size.GetValue(new_obj);
+                    //FieldInfo cl_widest = current_fld.FieldType.GetField("__widest__");
+                    //widest_byte = (int)cl_widest.GetValue(new_obj);
+                    aligned_size += byte_size;
+                }
                 else
                 {
-                    if (current_fld.Name != "mem_address" && current_fld.Name != "__size__")
+                    if (current_fld.Name != "mem_address"
+                        && current_fld.Name != "__size__"
+                        && current_fld.Name != "__widest__")
                     {
                         c_conv cnv = c_conv._size_of_type(current_fld.FieldType);
                         byte_size = cnv.size;
                         widest_byte = Math.Max(byte_size, widest_byte);
                         aligned_size = Binary._align(aligned_size, byte_size);
-                        //FieldInfo xref_source = new_obj.GetType().GetField("mem_address",bind_flag);
-                        //List<int> mem_address_list =(List<int>) xref_source.GetValue(new_obj);
                         mem_address_list.Add(current_fld.Name, aligned_size);
                         aligned_size += byte_size;
                     }
@@ -247,14 +345,27 @@ namespace Kernel
                 aligned_size = ((aligned_size + (widest_byte - 1)) & ~(widest_byte - 1));
             }
 #endif
+            FieldInfo __size = new_obj.GetType().GetField("__size__");
+            if (__size == null)
+                throw new Exception($"Public static field '__size__' is not defined in class{new_obj.ToString()}");
+            __size.SetValue(new_obj, aligned_size);
+
+            FieldInfo __widest = new_obj.GetType().GetField("__widest__");
+            if (__widest == null)
+                throw new Exception($"Public static field '__widest__' is not defined in class{new_obj.ToString()}");
+            __widest.SetValue(new_obj, widest_byte);
 
             return aligned_size;
         }
 
         public static string to_c_c_plusplus<T>(T new_obj)
         {
+            return to_c_c_plusplus(new_obj, 0);
+        }
+        public static string to_c_c_plusplus<T>(T new_obj, int origin_address)
+        {
             //we only export structures that have a '__size__' field
-            FieldInfo __struct_size_field__ = new_obj.GetType().GetField("__size__", bind_flag);
+            FieldInfo __struct_size_field__ = new_obj.GetType().GetField("__size__", bind_flag_exporter);
             if (__struct_size_field__ == null)
             {
                 throw new Exception($"The specified type {new_obj.GetType()} does not bave a public static field named '__size__'");
@@ -262,27 +373,42 @@ namespace Kernel
             int __struct_size__ = (int)__struct_size_field__.GetValue(null);
 
             byte[] stream = new byte[__struct_size__];
-            string struct_info = "struct " + new_obj.GetType().Name + "\t //size=" + __struct_size__ + "\r\n{\r\n";
-
-            FieldInfo xref_source = new_obj.GetType().GetField("mem_address", bind_flag);
+            string short_name = "s_" + new_obj.GetType().Name.ToLower();
+            string struct_info = $"struct {short_name} \t //size = {__struct_size__}\r\n{{\r\n";
+            struct_info += $"{short_name}()\r\n {{\r\n\tmemset(this,0,sizeof({short_name}));\r\n}}\r\n";
+            FieldInfo xref_source = new_obj.GetType().GetField("mem_address", bind_flag_exporter);
             Dictionary<string, int> mem_address_list = (Dictionary<string, int>)xref_source.GetValue(new_obj);
-            int addr_idx = 0;
 
-            //fields HAVE to be returned in meta data order!!
-            foreach (FieldInfo current_fld in new_obj.GetType().GetFields(bind_flag)
-                .OrderBy(field => field.MetadataToken))
+
+            FieldInfo[] all_fld = new_obj.GetType().
+                GetFields(bind_flag).OrderBy(field => field.MetadataToken).ToArray();
+            //seems to be a problem with the foreach orderby. its pulling fields from subclasses
+            //foreach (FieldInfo current_fld in new_obj.GetType().
+            //    GetFields(bind_flag).OrderBy(field => field.MetadataToken))
+            foreach (FieldInfo current_fld in all_fld)
             {
                 if (current_fld.FieldType.IsArray)
                 {
-                    struct_info += _h_write_array_to_c(current_fld, new_obj, current_fld.Name, mem_address_list);
+                    struct_info += _h_write_array_to_c(current_fld, new_obj, current_fld.Name
+                        , mem_address_list, origin_address);
                     //h_write_object(begin_address, ref widest_byte, current_fld.GetType(), new_obj, stream);
+                }
+                else if (current_fld.FieldType.IsClass && current_fld.Name != "mem_address")
+                {
+                    int address = mem_address_list[current_fld.Name];
+                    struct_info += to_c_c_plusplus(current_fld.GetValue(new_obj), address);
+                    struct_info += $"\r\ns_{current_fld.GetValue(new_obj).GetType().Name.ToLower()} {current_fld.Name};";
                 }
                 else
                 {
-                    if (current_fld.Name != "mem_address" && current_fld.Name != "__size__")
+                    if (current_fld.Name != "mem_address"
+                        && current_fld.Name != "__size__"
+                        && current_fld.Name != "__widest__")
+
                     {
                         object reff = current_fld.GetValue(new_obj);
-                        struct_info += _h_write_object_to_c(current_fld.FieldType, reff, current_fld.Name, mem_address_list);
+                        struct_info += _h_write_object_to_c(current_fld.FieldType, reff
+                            , current_fld.Name, mem_address_list, origin_address);
                     }
                 }
             }
@@ -293,7 +419,7 @@ namespace Kernel
         }
 
         private static string _h_write_array_to_c(FieldInfo current_fld, object new_obj
-            , string field_name, Dictionary<string, int> mem_address_list)
+            , string field_name, Dictionary<string, int> mem_address_list, int origin_address)
         {
             string field_info = "";
             string array_info = "";
@@ -307,12 +433,12 @@ namespace Kernel
                 foreach (var arr_ref_source_item in arr_ref_source)
                 {
                     cnv = c_conv._size_of_type(arr_ref_source_item.GetType());
-                    int address = mem_address_list[current_fld.Name + "_" + idx++];
+                    int address = mem_address_list[current_fld.Name + "_" + idx++] + origin_address;
                     int span = (address + cnv.size) - 1;
                     array_info += $"\t\t\t\t//memory position {address}-{span} (byte boundary)\r\n";
 
                 }
-                field_info = $"{cnv.c_type_string} {current_fld.Name}[{arrayLength}]\t\t//size {cnv.size}*{arrayLength}\r\n";
+                field_info = $"{cnv.c_type_string} {current_fld.Name}[{arrayLength}];\t\t//size {cnv.size}*{arrayLength}\r\n";
                 field_info += array_info;
             }
             //field_info += "\r\n";
@@ -321,50 +447,72 @@ namespace Kernel
 
         private static int next_address = 0;
         private static string _h_write_object_to_c(Type current_fld, object new_obj, string field_name
-            , Dictionary<string, int> mem_address_list)
+            , Dictionary<string, int> mem_address_list, int origin_address)
         {
 
             // we only export fields that have a 'width' field
             Type source_type = current_fld;
-            int address = mem_address_list[field_name];
+            int address = mem_address_list[field_name] + origin_address;
             string field_info = "";
             c_conv cnv = c_conv._size_of_type(current_fld);
             int span = (address + cnv.size) - 1;
 
             next_address = address + cnv.size;
 
-            field_info += $"{cnv.c_type_string} {field_name} \t\t//size {cnv.size}\tmemory position {address}-{span} (byte boundary)";
+            field_info += $"{cnv.c_type_string} {field_name}; \t\t//size {cnv.size}\tmemory position {address}-{span} (byte boundary)";
 
             field_info += "\r\n";
-
-
 
             return field_info;
         }
 
-        public static T Read<T>(byte[] stream)
+        public static object Read(byte[] stream, object obj)
         {
-            T new_obj = (T)Activator.CreateInstance(typeof(T));
+            return Read(stream, 0, obj);
+        }
+        public static object Read(byte[] stream, int origin_address, object obj)
+        {
 
-            FieldInfo f_info = new_obj.GetType().GetField("mem_address", bind_flag);
-            Dictionary<string, int> mem_address_list = (Dictionary<string, int>)f_info.GetValue(new_obj);
+            FieldInfo f_info = obj.GetType().GetField("mem_address", bind_flag);
+            Dictionary<string, int> mem_address_list = (Dictionary<string, int>)f_info.GetValue(obj);
 
-            foreach (FieldInfo current_fld in new_obj.GetType().
-                GetFields(bind_flag).OrderBy(field => field.MetadataToken))
+            FieldInfo[] all_fld = obj.GetType().
+                GetFields(bind_flag).OrderBy(field => field.MetadataToken).ToArray();
+            //seems to be a problem with the foreach orderby. its pulling fields from subclasses
+            //foreach (FieldInfo current_fld in new_obj.GetType().
+            //    GetFields(bind_flag).OrderBy(field => field.MetadataToken))
+            foreach (FieldInfo current_fld in all_fld)
             {
                 if (current_fld.FieldType.IsArray)
                 {
-                    _h_read_array(current_fld, new_obj, stream, mem_address_list);
+                    _h_read_array(current_fld, obj, stream, mem_address_list, origin_address);
                 }
-                else
+                else if (current_fld.FieldType.IsClass && current_fld.Name != "mem_address")
                 {
-                    h_read_object(current_fld, new_obj, stream, mem_address_list);
+                    int address = mem_address_list[current_fld.Name];
+                    object reff = current_fld.GetValue(obj);
+                    Read(stream, address, reff);
+
+                }
+                else if (current_fld.Name != "mem_address"
+                    && current_fld.Name != "__size__"
+                    && current_fld.Name != "__widest__")
+                {
+                    h_read_object(current_fld, obj, stream, mem_address_list, origin_address);
                 }
             }
-            return new_obj;
+            return obj;
         }
+
         public static byte[] Write<T>(T new_obj)
         {
+            return Write(new_obj, 0);
+        }
+        public static byte[] Write<T>(T new_obj, int origin_address)
+        {
+            //dont need this per class offset
+            origin_address = 0;
+
             //we only export structures that have a '__size__' field
             FieldInfo __struct_size_field__ = new_obj.GetType().GetField("__size__", bind_flag);
             if (__struct_size_field__ == null)
@@ -374,45 +522,50 @@ namespace Kernel
             int __struct_size__ = (int)__struct_size_field__.GetValue(null);
 
             byte[] stream = new byte[__struct_size__];
-            int addr_idx = 0;
+
 
             FieldInfo xref_source = new_obj.GetType().GetField("mem_address", bind_flag);
             Dictionary<string, int> mem_address_list = (Dictionary<string, int>)xref_source.GetValue(new_obj);
 
 
-            //fields HAVE to be returned in meta data order!!
-            foreach (FieldInfo current_fld in new_obj.GetType().GetFields(bind_flag)
-                .OrderBy(field => field.MetadataToken))
+            FieldInfo[] all_fld = new_obj.GetType().
+                 GetFields(bind_flag).OrderBy(field => field.MetadataToken).ToArray();
+            //seems to be a problem with the foreach orderby. its pulling fields from subclasses
+            //foreach (FieldInfo current_fld in new_obj.GetType().
+            //    GetFields(bind_flag).OrderBy(field => field.MetadataToken))
+            foreach (FieldInfo current_fld in all_fld)
             {
                 if (current_fld.FieldType.IsArray)
                 {
-                    _h_write_array(current_fld, new_obj, stream, mem_address_list);
-                    //h_write_object(begin_address, ref widest_byte, current_fld.GetType(), new_obj, stream);
+                    _h_write_array(current_fld, new_obj, stream, mem_address_list, origin_address);
+                }
+                else if (current_fld.FieldType.IsClass && current_fld.Name != "mem_address")
+                {
+                    int address = mem_address_list[current_fld.Name];
+                    object reff = current_fld.GetValue(new_obj);
+                    byte[] sub_stream = Write(reff, address);
+                    FieldInfo sub_struct_size = reff.GetType().GetField("__size__", bind_flag);
+                    int sub_size = (int)sub_struct_size.GetValue(null);
+
+                    Array.Copy(sub_stream, 0, stream, address, sub_size);
+
                 }
                 else
                 {
-                    if (current_fld.Name != "mem_address" && current_fld.Name != "__size__")
+                    if (current_fld.Name != "mem_address"
+                        && current_fld.Name != "__size__"
+                        && current_fld.Name != "__widest__")
+
                     {
                         object reff = current_fld.GetValue(new_obj);
-                        _h_write_object(current_fld, reff, stream, mem_address_list);
+                        _h_write_object(current_fld, reff, stream, mem_address_list, origin_address);
                     }
                 }
             }
-
-            //uint16_t crc_test = (uint16_t)Kernel.Base.CRC.generate(stream, __struct_size__);
-            //FieldInfo crc_field = new_obj.GetType().GetField("crc");
-            //int crc_address = (int)_h_get_value(crc_field.GetValue(new_obj), "_address");
-            //int crc_size = (int)_h_get_value(crc_field.GetValue(new_obj), "width");
-            ////compute crc for array and store
-            //Array.Copy(
-            //    BitConverter.GetBytes(
-            //        (uint16_t)Kernel.Base.CRC.generate(stream, __struct_size__))
-            //    , 0, stream, crc_address, crc_size);
-
             return stream;
         }
 
-        public static byte[] get_struct_crc_bytes<T>(T obj, byte[] stream)
+        public static byte[] get_struct_crc_bytes<T>(T obj, byte[] stream, string crc_field)
         {
             FieldInfo __struct_size_field__ = obj.GetType().GetField("__size__", bind_flag);
             if (__struct_size_field__ == null)
@@ -423,13 +576,37 @@ namespace Kernel
             FieldInfo xref_source = obj.GetType().GetField("mem_address", bind_flag);
             Dictionary<string, int> mem_address_list = (Dictionary<string, int>)xref_source.GetValue(obj);
 
-            FieldInfo crc_field = obj.GetType().GetField("crc");
-            c_conv cnv = c_conv._size_of_type(crc_field.FieldType);
-            int crc_address = mem_address_list["crc"];
+            FieldInfo o_crc_field = obj.GetType().GetField(crc_field);
+            c_conv cnv = c_conv._size_of_type(o_crc_field.FieldType);
+            int crc_address = mem_address_list[crc_field];
             return cnv.get_handler(stream);
         }
 
-        public static byte[] set_struct_crc_bytes<T>(T obj, byte[] stream)
+        public static UInt16 get_struct_crc_uint<T>(T obj, byte[] stream, string crc_field)// = "crc")
+        {
+            FieldInfo __struct_size_field__ = obj.GetType().GetField("__size__", bind_flag);
+            if (__struct_size_field__ == null)
+            {
+                throw new Exception($"The specified type {obj.GetType()} does not bave a public/private static field named '__size__'");
+            }
+
+            FieldInfo xref_source = obj.GetType().GetField("mem_address", bind_flag);
+            Dictionary<string, int> mem_address_list = (Dictionary<string, int>)xref_source.GetValue(obj);
+
+            FieldInfo o_crc_field = obj.GetType().GetField(crc_field);
+
+            if (o_crc_field == null)
+                throw new Exception($"There is no CRC field named '{crc_field}' in class '{obj.GetType().ToString()}'. Please define a UInt16 field with the specified name.");
+
+            c_conv cnv = c_conv._size_of_type(o_crc_field.FieldType);
+            int crc_address = mem_address_list[crc_field];
+
+
+            return BitConverter.ToUInt16(Binary.c_conv._fix_endian
+                (stream, crc_address, cnv.size), 0);
+        }
+
+        public static byte[] set_struct_crc_bytes<T>(T obj, byte[] stream, string crc_field)
         {
             FieldInfo __struct_size_field__ = obj.GetType().GetField("__size__", bind_flag);
             if (__struct_size_field__ == null)
@@ -441,9 +618,11 @@ namespace Kernel
             Dictionary<string, int> mem_address_list = (Dictionary<string, int>)xref_source.GetValue(obj);
 
             UInt16 crc_test = (UInt16)Kernel.Base.CRC.generate(stream, stream.Length);
-            FieldInfo crc_field = obj.GetType().GetField("crc");
-            c_conv cnv = c_conv._size_of_type(crc_field.FieldType);
-            int crc_address = mem_address_list["crc"];
+            FieldInfo o_crc_field = obj.GetType().GetField(crc_field);
+            if (o_crc_field == null)
+                throw new Exception($"There is no CRC field named '{crc_field}' in class '{obj.GetType().ToString()}'. Please define a UInt16 field with the specified name.");
+            c_conv cnv = c_conv._size_of_type(o_crc_field.FieldType);
+            int crc_address = mem_address_list[crc_field];
 
             //compute crc for array and store
             Array.Copy(
@@ -454,7 +633,7 @@ namespace Kernel
 
         }
 
-        public static byte[] clear_struct_crc_bytes<T>(T obj, byte[] stream)
+        public static byte[] clear_struct_crc_bytes<T>(T obj, byte[] stream, string crc_field)
         {
             FieldInfo __struct_size_field__ = obj.GetType().GetField("__size__", bind_flag);
             if (__struct_size_field__ == null)
@@ -466,9 +645,13 @@ namespace Kernel
             Dictionary<string, int> mem_address_list = (Dictionary<string, int>)xref_source.GetValue(obj);
 
             UInt16 crc_test = 0;
-            FieldInfo crc_field = obj.GetType().GetField("crc");
-            c_conv cnv = c_conv._size_of_type(crc_field.FieldType);
-            int crc_address = mem_address_list["crc"];
+            FieldInfo o_crc_field = obj.GetType().GetField(crc_field);
+
+            if (o_crc_field == null)
+                throw new Exception($"There is no CRC field named '{crc_field}' in class '{obj.GetType().ToString()}'. Please define a UInt16 field with the specified name.");
+
+            c_conv cnv = c_conv._size_of_type(o_crc_field.FieldType);
+            int crc_address = mem_address_list[crc_field];
 
             Array.Copy(
                 BitConverter.GetBytes(
@@ -478,7 +661,7 @@ namespace Kernel
         }
 
         private static void _h_write_array(FieldInfo current_fld, object new_obj
-            , byte[] stream, Dictionary<string, int> mem_address_list)
+            , byte[] stream, Dictionary<string, int> mem_address_list, int origin_address)
         {
 
             if (current_fld.FieldType.IsArray)
@@ -489,7 +672,7 @@ namespace Kernel
                 foreach (var arr_ref_source_item in arr_ref_source)
                 {
                     cnv = c_conv._size_of_type(arr_ref_source_item.GetType());
-                    int address = mem_address_list[current_fld.Name + "_" + idx++];
+                    int address = mem_address_list[current_fld.Name + "_" + idx++] + origin_address;
                     byte[] val = cnv.get_handler(arr_ref_source_item);
                     Array.Copy(val, 0, stream, address, cnv.size);
 
@@ -498,13 +681,15 @@ namespace Kernel
         }
 
         private static void _h_write_object(FieldInfo current_fld, object new_obj, byte[] stream
-            , Dictionary<string, int> mem_address_list)
+            , Dictionary<string, int> mem_address_list, int origin_address)
         {
-            if (current_fld.Name != "mem_address" && current_fld.Name != "__size__")
+            if (current_fld.Name != "mem_address"
+                && current_fld.Name != "__size__"
+                && current_fld.Name != "__widest__")
             {
                 c_conv cnv = c_conv._size_of_type(current_fld.FieldType);
                 int byte_size = cnv.size;
-                int address = mem_address_list[current_fld.Name];
+                int address = mem_address_list[current_fld.Name] + origin_address;
                 byte[] val = cnv.get_handler(new_obj);
                 Array.Copy(val, 0, stream, address, byte_size);
 
@@ -512,19 +697,22 @@ namespace Kernel
         }
 
         private static void h_read_object(FieldInfo current_fld, object new_obj, byte[] stream,
-            Dictionary<string, int> mem_address_list)
+            Dictionary<string, int> mem_address_list, int origin_address)
         {
-            if (current_fld.Name != "mem_address" && current_fld.Name != "__size__")
+            if (current_fld.Name != "mem_address"
+                && current_fld.Name != "__size__"
+                && current_fld.Name != "__widest__")
             {
                 c_conv cnv = c_conv._size_of_type(current_fld.FieldType);
                 int byte_size = cnv.size;
-                int address = mem_address_list[current_fld.Name];
+                int address = mem_address_list[current_fld.Name] + origin_address;
                 object val = cnv.set_handler(stream, address);
                 current_fld.SetValue(new_obj, val);
             }
         }
 
-        private static void _h_read_array(FieldInfo current_fld, object new_obj, byte[] stream, Dictionary<string, int> mem_address_list)
+        private static void _h_read_array(FieldInfo current_fld, object new_obj, byte[] stream,
+            Dictionary<string, int> mem_address_list, int origin_address)
         {
 
             if (current_fld.FieldType.IsArray)
@@ -538,7 +726,7 @@ namespace Kernel
                 {
                     cnv = c_conv._size_of_type(arr_ref_source_item.GetType());
 
-                    int address = mem_address_list[current_fld.Name + "_" + idx];
+                    int address = mem_address_list[current_fld.Name + "_" + idx] + origin_address;
                     object val = cnv.set_handler(stream, address);
                     arr_ref_source.SetValue(val, idx++);
                 }

@@ -51,7 +51,7 @@ namespace Kernel
             //aTimer.Elapsed += ATimer_Elapsed;
             //aTimer.AutoReset = true;
             //aTimer.Enabled = true;
-            
+
             bool success = false;
 
             try
@@ -94,10 +94,10 @@ namespace Kernel
             OutgoingData.AddRange(data);
         }
 
-        private Func<List<byte>, object> Serial_Read;
+        private Func<List<byte>, string, object> Serial_Read;
         private void _serialPort_DataReceived(object sender, SerialDataReceivedEventArgs e)
         {
-            try
+            //try
             {
                 if (_serialPort.IsOpen)
                 {
@@ -119,7 +119,7 @@ namespace Kernel
 
                         if (Serial_Read != null) //if not null we had enough data for the start
                         {
-                            object result = Serial_Read(IncomingData);
+                            object result = Serial_Read(IncomingData, "crc");
                             if (result != null)
                             {
                                 Objects.Add(result);
@@ -131,21 +131,23 @@ namespace Kernel
                                 break;
                             }
                         }
+                        else
+                            break;
                     }
                 }
             }
-            catch (TimeoutException)
-            {
-                //add a message to the kernel errors, but continue
-            }
-            catch (Exception ex)
-            {
-                //add a message to the kernel errors, and stop
-                _shutdown();
-            }
+            //catch (TimeoutException)
+            //{
+            //    //add a message to the kernel errors, but continue
+            //}
+            //catch (Exception ex)
+            //{
+            //    //add a message to the kernel errors, and stop
+            //    _shutdown();
+            //}
         }
 
-        private Func<List<byte>, object> _assign_reader(List<byte> data)
+        private Func<List<byte>, string, object> _assign_reader(List<byte> data)
         {
             if (data.Count < 4)
                 return null;
@@ -158,18 +160,21 @@ namespace Kernel
 
             for (int read_byte = 0; read_byte < data.Count - 4; read_byte++)
             {
-                Record_Types.Record_Type rec_type = (Record_Types.Record_Type)data[read_byte];
-
-                bool header_pass = Record_Types._Key.key1 == data[read_byte + 1]
-                    && Record_Types._Key.key2 == data[read_byte + 2]
-                    && Record_Types._Key.key3 == data[read_byte + 3];
-
-                if (!header_pass)
+                bool header_pass = false;
+                if (Record_Types._Key.key1 == data[read_byte + 1])
                 {
-                    data.RemoveAt(0);
-                    read_byte --;
-                    continue;
+                    header_pass = Record_Types._Key.key2 == data[read_byte + 2]
+                        && Record_Types._Key.key3 == data[read_byte + 3];
                 }
+                if (!header_pass)
+                    continue;
+
+                if (read_byte > 0)
+                    data.RemoveRange(0, read_byte);
+
+                read_byte = 0;
+
+                Record_Types.Record_Type rec_type = (Record_Types.Record_Type)data[read_byte];
 
                 switch (rec_type)
                 {

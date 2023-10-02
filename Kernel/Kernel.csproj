@@ -45,6 +45,8 @@
     <Compile Include="Binary.cs" />
     <Compile Include="Comm.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Record_Types\Control.cs" />
+    <Compile Include="Record_Types\e_state_types.cs" />
     <Compile Include="Record_Types\iRecord_Types.cs" />
     <Compile Include="Record_Types\Record_Type_Enums.cs" />
     <Compile Include="Record_Types\ToolHead.cs" />
